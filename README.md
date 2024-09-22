@@ -1,4 +1,4 @@
-# Breast-cancer-detection
+# Breast-cancer-detection-using-Machine-Learning
 
 This project involves training a neural network model to detect breast cancer based on microscopic images of tumor tissue. We utilized a Kaggle dataset containing 7,909 images—2,480 of benign tumors and 5,429 of malignant tumors.
 
