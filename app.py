@@ -4,104 +4,174 @@ from tensorflow.keras import models
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Dropout, Activation, Flatten
 from tensorflow.keras.layers import Conv2D, MaxPooling2D
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint, ReduceLROnPlateau
 
 import numpy as np 
 import os
 import cv2
 import random
 from tqdm import tqdm
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
 
+# Configuration
+SEED = 42
+IMG_SIZE = 120
+BATCH_SIZE = 32
+EPOCHS = 20
+np.random.seed(SEED)
+tf.random.set_seed(SEED)
 
 traindir = "C:/Datasets/BreastCancer/training"
 testdir = "C:/Datasets/BreastCancer/testing"
 categories = ["benign","malignant"]
 
-IMG_SIZE = 120
-
-#trening
-training_data = []
-
-def create_training_data():
-    for category in categories:  # benign i malignant
-
-        path = os.path.join(traindir,category)  
-        class_num = categories.index(category) #benign - 0 i malignant - 1 
-
-        for img in tqdm(os.listdir(path)):  
+def create_data(directory):
+    data = []
+    for category in categories:
+        path = os.path.join(directory, category)
+        class_num = categories.index(category)
+        
+        for img in tqdm(os.listdir(path)):
             try:
-                img_niz = cv2.imread(os.path.join(path,img) ,cv2.IMREAD_GRAYSCALE)  
-                new_niz = cv2.resize(img_niz, (IMG_SIZE, IMG_SIZE))  
-                training_data.append([new_niz, class_num]) 
+                img_array = cv2.imread(os.path.join(path,img), cv2.IMREAD_GRAYSCALE)
+                resized_array = cv2.resize(img_array, (IMG_SIZE, IMG_SIZE))
+                data.append([resized_array, class_num])
             except Exception as e:
-                pass
+                print(f"Error loading image {img}: {str(e)}")
+    
+    return data
 
-create_training_data()
+# Create data
+print("Loading training data...")
+training_data = create_data(traindir)
+print("Loading testing data...")
+testing_data = create_data(testdir)
+
+# Shuffle data
 random.shuffle(training_data)
-
-x_train = [] #slike
-y_train = [] #label
-
-for features,label in training_data:
-    x_train.append(features)
-    y_train.append(label)
-
-x_train = np.array(x_train).reshape(-1, IMG_SIZE, IMG_SIZE, 1)
-x_train= x_train/255
-
-#testiranje
-testing_data = []
-def create_testing_data():
-    for category in categories:  # benign i malignant
-
-        path = os.path.join(testdir,category)  
-        class_num = categories.index(category) #benign - 0 i malignant - 1 
-
-        for img in tqdm(os.listdir(path)):  
-            try:
-                img_niz = cv2.imread(os.path.join(path,img) ,cv2.IMREAD_GRAYSCALE)  
-                new_niz = cv2.resize(img_niz, (IMG_SIZE, IMG_SIZE))  
-                testing_data.append([new_niz, class_num]) 
-            except Exception as e:
-                pass
-
-create_testing_data()
 random.shuffle(testing_data)
 
-x_test = [] 
-y_test = [] 
+# Prepare arrays
+def prepare_data(data):
+    x = []
+    y = []
+    for features, label in data:
+        x.append(features)
+        y.append(label)
+    x = np.array(x).reshape(-1, IMG_SIZE, IMG_SIZE, 1)
+    x = x / 255.0
+    return x, np.array(y)
 
-for features,label in testing_data:
-    x_test.append(features)
-    y_test.append(label)
+x_train, y_train = prepare_data(training_data)
+x_test, y_test = prepare_data(testing_data)
 
-x_test = np.array(x_test).reshape(-1, IMG_SIZE, IMG_SIZE, 1)
-x_test= x_test/255
+# Data Augmentation
+datagen = ImageDataGenerator(
+    rotation_range=20,
+    width_shift_range=0.2,
+    height_shift_range=0.2,
+    horizontal_flip=True,
+    vertical_flip=True,
+    fill_mode='nearest'
+)
 
-#model
-model = Sequential()
+# Build model
+def build_model():
+    model = Sequential([
+        Conv2D(32, (3, 3), activation='relu', input_shape=(IMG_SIZE, IMG_SIZE, 1)),
+        MaxPooling2D(pool_size=(2, 2)),
+        Dropout(0.25),
+        
+        Conv2D(64, (3, 3), activation='relu'),
+        MaxPooling2D(pool_size=(2, 2)),
+        Dropout(0.25),
+        
+        Conv2D(128, (3, 3), activation='relu'),
+        MaxPooling2D(pool_size=(2, 2)),
+        Dropout(0.25),
+        
+        Flatten(),
+        Dense(128, activation='relu'),
+        Dropout(0.5),
+        Dense(1, activation='sigmoid')
+    ])
+    
+    model.compile(
+        loss='binary_crossentropy',
+        optimizer='adam',
+        metrics=['accuracy', tf.keras.metrics.AUC()]
+    )
+    
+    return model
 
-model.add(Conv2D(32, (3, 3), input_shape=x_train.shape[1:]))
-model.add(Activation('relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
+# Callbacks
+callbacks = [
+    EarlyStopping(patience=5, monitor='val_loss', restore_best_weights=True),
+    ReduceLROnPlateau(factor=0.2, patience=3, monitor='val_loss'),
+    ModelCheckpoint('best_model.h5', save_best_only=True, monitor='val_loss')
+]
 
-model.add(Conv2D(64, (3, 3)))
-model.add(Activation('relu'))
-model.add(MaxPooling2D(pool_size=(2, 2)))
+# Create and train model
+model = build_model()
+print(model.summary())
 
-model.add(Flatten())  
+# Train with data augmentation
+history = model.fit(
+    datagen.flow(x_train, y_train, batch_size=BATCH_SIZE),
+    epochs=EPOCHS,
+    validation_data=(x_test, y_test),
+    callbacks=callbacks
+)
 
-model.add(Dense(64))
+# Evaluate model
+loss, accuracy, auc = model.evaluate(x_test, y_test)
+print(f"Test Loss: {loss:.4f}")
+print(f"Test Accuracy: {accuracy:.4f}")
+print(f"Test AUC: {auc:.4f}")
 
-model.add(Dense(1))
-model.add(Activation('sigmoid'))
+# Plot training history
+def plot_training_history(history):
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 5))
+    
+    # Accuracy plot
+    ax1.plot(history.history['accuracy'])
+    ax1.plot(history.history['val_accuracy'])
+    ax1.set_title('Model Accuracy')
+    ax1.set_ylabel('Accuracy')
+    ax1.set_xlabel('Epoch')
+    ax1.legend(['Train', 'Validation'])
+    
+    # Loss plot
+    ax2.plot(history.history['loss'])
+    ax2.plot(history.history['val_loss'])
+    ax2.set_title('Model Loss')
+    ax2.set_ylabel('Loss')
+    ax2.set_xlabel('Epoch')
+    ax2.legend(['Train', 'Validation'])
+    
+    plt.tight_layout()
+    plt.savefig('training_history.png')
+    plt.close()
 
-model.compile(loss='binary_crossentropy',
-              optimizer='adam',
-              metrics=['accuracy'])
+plot_training_history(history)
 
-model.fit(x_train, y_train, batch_size=32, epochs=3, validation_split=0.2)
+# Save model
+model.save('breast_cancer_model.h5')
+print("Model saved as 'breast_cancer_model.h5'")
 
-loss, accuracy = model.evaluate(x_test, y_test)  
-print(f"loss je :{loss}, tacnost je:{accuracy}")
+# Function for making predictions on new images
+def predict_image(image_path):
+    img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+    img = cv2.resize(img, (IMG_SIZE, IMG_SIZE))
+    img = img.reshape(-1, IMG_SIZE, IMG_SIZE, 1)
+    img = img / 255.0
+    
+    prediction = model.predict(img)
+    probability = prediction[0][0]
+    class_name = categories[1] if probability > 0.5 else categories[0]
+    
+    return class_name, probability
 
-model.save('cancer detection.model')
+print("\nModel is ready for predictions. Use predict_image(image_path) to classify new images.")

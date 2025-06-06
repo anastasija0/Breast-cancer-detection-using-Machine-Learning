@@ -1,32 +1,36 @@
-# Breast-cancer-detection-using-Machine-Learning
+# Breast Cancer Detection using Deep Learning
 
-This project involves training a neural network model to detect breast cancer based on microscopic images of tumor tissue. We utilized a Kaggle dataset containing 7,909 images—2,480 of benign tumors and 5,429 of malignant tumors.
+This project implements a Convolutional Neural Network (CNN) to classify breast cancer images as either benign or malignant.
 
-The dataset was preprocessed, including image resizing and normalization, before being fed into a Convolutional Neural Network (CNN). The model architecture includes multiple convolutional layers, max pooling, and dense layers to optimize feature extraction and classification.
+## Setup
 
-The model was trained to achieve high accuracy in distinguishing between benign and malignant tumors, providing a valuable tool for early detection.
+1. Install dependencies:
+```bash
+pip install -r requirements.txt
+```
 
-For more details, you can access the dataset here: [Kaggle Breast Cancer Prediction Dataset.](https://www.kaggle.com/datasets/merishnasuwal/breast-cancer-prediction-dataset/data).
+2. Data Organization:
+Place your dataset in the following structure:
+```
+C:/Datasets/BreastCancer/
+├── training/
+│   ├── benign/
+│   └── malignant/
+└── testing/
+    ├── benign/
+    └── malignant/
+```
 
-# Key Features
-Python 3.x
+3. Run the model:
+```bash
+python app.py
+```
 
-TensorFlow
+## Model Architecture
+- Input: Grayscale images (120x120 pixels)
+- 2 Convolutional layers with MaxPooling
+- Dense layers for classification
+- Binary output (benign/malignant)
 
-Keras
-
-OpenCV
-
-NumPy
-
-# Code Overview
-
-**Data Preparation:** Efficient loading and preprocessing of images using OpenCV and NumPy.
-
-**Model Architecture:** Utilizes a multi-layer CNN with convolutional, pooling, and dense layers to extract features and classify images.
-
-**Training and Validation:** Model trained on a specified dataset with a validation split to monitor performance.
-
-**Evaluation Metrics:** Outputs loss and accuracy to gauge model effectiveness.
-
-**Model Persistence:** Saves the trained model for future inference or further training.
+## Performance Metrics
+The model evaluates accuracy and loss on the test set.
